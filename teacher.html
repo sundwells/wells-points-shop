@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教师端 · Wells' Points Shop</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><span>W</span> Wells' Points Shop</a>
+    <a class="text-link" href="index.html">返回</a>
+  </header>
+
+  <main class="page">
+    <section id="authView" class="login-card teacher-login">
+      <p class="eyebrow">TEACHER ACCESS</p>
+      <h1>教师登录</h1>
+      <p class="muted">只有教师账号可以进入积分管理。</p>
+      <label>邮箱
+        <input id="teacherEmail" type="email" autocomplete="username" placeholder="teacher@example.com">
+      </label>
+      <label>密码
+        <input id="teacherPassword" type="password" autocomplete="current-password" placeholder="密码">
+      </label>
+      <button id="teacherLogin" class="primary-btn">登录</button>
+      <p id="authMessage" class="form-message"></p>
+    </section>
+
+    <section id="dashboardView" class="hidden">
+    <section class="hero compact">
+      <div>
+        <p class="eyebrow">TEACHER DASHBOARD</p>
+        <h1>积分管理</h1>
+        <p class="muted">选择积分类型后，只显示该类型允许的积分档位。</p>
+      </div>
+      <div class="teacher-stat">
+
+         <span>当前班级</span>
+
+         <select
+           id="currentClass"
+           class="class-selector"
+         >
+          <option value="">
+            加载中……
+          </option>
+         </select>
+
+        <button
+          id="teacherLogout"
+          class="logout-btn"
+        >
+          退出登录
+        </button>
+
+      </div>
+    </section>
+
+    <section class="tabs">
+
+  <button
+    class="tab active"
+    data-panel="points"
+  >
+    录入积分
+  </button>
+
+  <button
+    class="tab"
+    data-panel="rewards"
+  >
+    奖品管理
+  </button>
+
+  <button
+    class="tab"
+    data-panel="redemptions"
+  >
+    兑换审核
+    <span
+      id="pendingRedemptionCount"
+      class="tab-badge hidden"
+    >
+      0
+    </span>
+  </button>
+
+  <button
+  class="tab"
+  data-panel="student-management"
+>
+  学生管理
+</button>
+
+</section>
+
+    <section id="panel-points" class="panel active">
+      <div class="panel-head">
+        <div>
+          <h2>录入积分</h2>
+          <p class="muted">不再手输分值，避免录错；先选类型，再选对应档位。</p>
+        </div>
+        <span class="date-pill" id="today"></span>
+      </div>
+
+      <div class="form-card">
+       <div class="full" id="studentArea">
+
+  <div class="selection-actions">
+
+    <strong>学生</strong>
+
+    <button
+      type="button"
+      id="selectAllStudents"
+      class="ghost-btn"
+    >
+      全选
+    </button>
+
+    <button
+      type="button"
+      id="clearStudents"
+      class="ghost-btn"
+    >
+      清空
+    </button>
+
+    <span id="selectedCount">
+      已选 0 人
+    </span>
+
+  </div>
+
+  <div
+    id="studentChecklist"
+    class="student-checklist"
+  ></div>
+
+</div>
+
+        <label>积分类型
+          <select id="categorySelect">
+            <option value="performance">表现分</option>
+            <option value="practice">练习分</option>
+            <option value="exam">考试分</option>
+          </select>
+          <div id="examBatchPanel" class="exam-batch-panel hidden">
+
+  <div class="exam-batch-title">
+    <strong>考试成绩批量录入</strong>
+    <span>输入成绩后自动计算积分</span>
+  </div>
+
+  <label>
+    测试名称
+    <input
+      type="text"
+      id="examName"
+      placeholder="例如：Unit 1–3 测试"
+    >
+  </label>
+
+  <div class="exam-score-list" id="examScoreList">
+    <!-- JS 自动生成 -->
+  </div>
+
+  <div class="exam-summary">
+    <span id="examFilledCount">已录入 0 人</span>
+    <span id="examTotalPoints">预计积分 0</span>
+  </div>
+
+  <button
+    type="button"
+    id="saveExamBatch"
+    class="primary-btn full"
+  >
+    确认并保存考试积分
+  </button>
+
+  <p id="examMessage" class="form-message"></p>
+
+</div>
+        </label>
+
+        <div id="normalPointArea">
+
+  <label>
+    具体名称
+    <input
+      id="description"
+      placeholder="如：困难问题 / Unit 2 作业"
+    >
+  </label>
+
+  <label class="full">
+    获得积分
+    <select id="pointsSelect"></select>
+  </label>
+
+  <button
+    id="savePoint"
+    class="primary-btn full"
+  >
+    给选中学生保存积分
+  </button>
+
+  <p
+    id="saveMessage"
+    class="form-message"
+  ></p>
+
+</div>
+      </div>
+     <section class="section quick-records">
+
+       <div class="section-heading">
+         <h2>今日录入记录</h2>
+         <span id="todayRecordCount">0 条</span>
+       </div>
+
+       <div id="todayRecords" class="record-list"></div>
+
+     </section>
+    </section>
+
+    
+    <section id="panel-rewards" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>奖品管理</h2>
+          <p class="muted">名称和兑换额度来自数据库，后续可直接编辑。</p>
+        </div>
+        <button class="primary-btn small" id="addReward">＋ 添加奖品</button>
+      </div>
+      <div id="rewardAdminList" class="admin-list"></div>
+      <!-- 奖品编辑弹窗 -->
+<div id="rewardModal" class="modal hidden">
+
+  <div class="modal-card">
+
+    <div class="modal-header">
+
+      <h3 id="rewardModalTitle">
+        添加奖品
+      </h3>
+
+      <button
+        type="button"
+        id="closeRewardModal"
+        class="ghost-btn"
+      >
+        ×
+      </button>
+
+    </div>
+
+    <div class="modal-body">
+
+      <input
+        type="hidden"
+        id="editingRewardId"
+      >
+
+      <label>
+        奖品名称
+
+        <input
+          type="text"
+          id="rewardName"
+          placeholder="例如：精美笔记本"
+        >
+      </label>
+
+      <label>
+        所需积分
+
+        <input
+          type="number"
+          id="rewardCost"
+          min="0"
+          step="0.1"
+          placeholder="例如：20"
+        >
+      </label>
+
+      <label>
+        奖品描述
+
+        <textarea
+          id="rewardDescription"
+          rows="3"
+          placeholder="例如：一本自己喜欢的笔记本"
+        ></textarea>
+
+      </label>
+
+      <label>
+        奖品图片
+
+        <input
+          type="file"
+          id="rewardImage"
+          accept="image/jpeg,image/png,image/webp"
+        >
+
+        <small class="field-hint">
+          支持 JPG、PNG、WebP，建议使用正方形图片，最大 5MB。
+        </small>
+
+      </label>
+
+      <div
+        id="rewardImagePreview"
+        class="reward-image-preview hidden"
+      >
+
+        <img
+          id="rewardPreviewImg"
+          alt="奖品图片预览"
+        >
+
+      </div>
+
+      <p
+        id="rewardModalMessage"
+        class="form-message"
+      ></p>
+
+    </div>
+
+    <div class="modal-footer">
+
+      <button
+        type="button"
+        id="cancelRewardModal"
+        class="ghost-btn"
+      >
+        取消
+      </button>
+
+      <button
+        type="button"
+        id="saveRewardModal"
+        class="primary-btn"
+      >
+        保存奖品
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+    </section>
+
+    <section
+  id="panel-redemptions"
+  class="panel"
+>
+
+  <div class="panel-head">
+
+    <div>
+
+      <h2>兑换审核</h2>
+
+      <p class="muted">
+        学生提交兑换申请后，在这里确认是否通过。
+      </p>
+
+    </div>
+
+    <button
+      id="refreshRedemptions"
+      class="ghost-btn"
+      type="button"
+    >
+      ↻ 刷新
+    </button>
+
+  </div>
+
+  <div
+    id="redemptionAdminList"
+    class="admin-list"
+  >
+
+    <p class="muted">
+      正在加载兑换申请……
+    </p>
+
+  </div>
+
+</section>
+<section
+  id="panel-student-management"
+  class="panel"
+>
+
+  <div class="panel-head">
+
+    <div>
+      <h2>学生管理</h2>
+
+      <p class="muted">
+        当前班级学生、积分余额和登录码。
+      </p>
+    </div>
+
+    <div class="student-management-search">
+      <label class="sr-only" for="studentManagementSearch">
+        搜索学生
+      </label>
+      <input
+        id="studentManagementSearch"
+        type="search"
+        placeholder="姓名、学号或登录码"
+        autocomplete="off"
+      >
+      <button
+        id="studentManagementSearchBtn"
+        class="ghost-btn"
+        type="button"
+        title="搜索学生"
+      >
+        搜索
+      </button>
+    </div>
+
+  </div>
+
+  <div class="student-management-actions">
+
+    <button
+      id="importStudentsBtn"
+      class="primary-btn"
+      type="button"
+    >
+      ＋ 批量导入学生
+    </button>
+    
+  <input
+      id="studentImportFile"
+      type="file"
+      accept=".xlsx,.xls,.csv"
+      hidden
+>
+
+    <button
+      id="exportAccessCodesBtn"
+      class="ghost-btn"
+      type="button"
+    >
+      导出登录码
+    </button>
+
+  </div>
+
+  <p
+    id="studentManagementMessage"
+    class="form-message student-management-message"
+    role="status"
+    aria-live="polite"
+  ></p>
+
+  <div
+    id="studentManagementList"
+    class="student-management-list"
+    aria-live="polite"
+  >
+    <p class="muted student-management-empty">正在加载学生……</p>
+  </div>
+  
+  <div
+    id="studentImportPreview"
+    class="student-import-preview"
+    hidden
+  ></div>
+
+</section>
+
+  </main>
+
+<footer class="site-footer">
+
+  <strong>Wells' Points Shop</strong>
+  <br>
+
+  © 2026 Wells. All Rights Reserved.
+
+</footer>
+  
+<script type="module" src="js/teacher.js"></script><script
+  src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+></script>
+</body>
+</html>

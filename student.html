@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的积分 · Wells' Points Shop</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><span>W</span> Wells' Points Shop</a>
+    <a class="text-link" href="index.html">返回</a>
+  </header>
+
+  <div id="loginPanel">
+
+  <form id="loginForm">
+
+    <input
+      id="accessCode"
+      type="text"
+      placeholder="请输入学生PIN"
+      autocomplete="off"
+    >
+
+    <button type="submit">
+      登录
+    </button>
+
+  </form>
+
+  <p id="loginMessage"></p>
+
+</div>
+
+
+<div
+  id="appPanel"
+  class="hidden"
+>
+  <main class="student-main">
+
+  <!-- =========================
+       顶部个人信息
+  ========================== -->
+
+  <section class="student-profile-card">
+
+    <div class="student-profile-main">
+
+      <div class="student-avatar">
+        👤
+      </div>
+
+      <div>
+
+        <h2 id="studentName">
+          同学
+        </h2>
+
+        <p id="studentClass">
+          --
+        </p>
+
+      </div>
+
+    </div>
+
+    <div class="student-points-box">
+
+      <span>
+        我的积分
+      </span>
+
+      <strong id="currentPoints">
+        0
+      </strong>
+
+      <small>
+        当前可用积分
+      </small>
+
+    </div>
+
+  </section>
+
+
+  <!-- =========================
+     奖品货架
+========================= -->
+
+<section class="reward-shop-section">
+
+  <div class="section-title-row reward-shop-header">
+
+    <div>
+      <h3>
+        🛍️ 奖品货架
+      </h3>
+
+      <p>
+        用积分兑换你喜欢的奖励
+      </p>
+    </div>
+
+    <span class="reward-shop-badge">
+      POINTS SHOP
+    </span>
+
+  </div>
+
+
+  <!-- 距离下一个奖品 -->
+
+  <div class="next-reward-inline">
+
+    <div class="next-reward-inline-title">
+      <span>🎯</span>
+
+      <div>
+        <strong>
+          距离下一个奖品
+        </strong>
+
+        <small>
+          再努力一点，就能兑换它啦
+        </small>
+      </div>
+    </div>
+
+
+    <div id="nextRewardContent">
+
+      <p class="muted">
+        正在计算……
+      </p>
+
+    </div>
+
+  </div>
+
+
+  <!-- 商品列表 -->
+
+  <div
+    id="rewardShelf"
+    class="reward-shelf"
+  >
+
+    <p class="muted">
+      正在加载……
+    </p>
+
+  </div>
+
+</section>
+
+
+  <!-- =========================
+       首页两个额外区块
+  ========================== -->
+
+  <section class="student-home-grid">
+
+
+    <!-- 排行榜 -->
+
+    <div class="home-widget">
+
+      <div class="widget-title">
+
+        <h3>
+          🏆 班级排行榜
+        </h3>
+
+        <span>
+          TOP 5
+        </span>
+
+      </div>
+
+      <div id="leaderboardList">
+
+        <p class="muted">
+          正在加载……
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <!-- 兑换动态 -->
+
+    <div class="home-widget">
+
+      <div class="widget-title">
+
+        <h3>
+          🎁 班级兑换动态
+        </h3>
+
+      </div>
+
+      <div
+        id="exchangeHistory"
+        class="exchange-marquee"
+      >
+
+        <p class="muted">
+          正在加载……
+        </p>
+
+      </div>
+
+    </div>
+
+
+  </section>
+
+
+  <!-- =========================
+       积分明细
+  ========================== -->
+
+  <section class="student-section">
+
+    <div class="section-title-row">
+
+      <h3>
+        📋 积分明细
+      </h3>
+
+    </div>
+
+    <div id="pointRecords">
+
+      <p class="muted">
+        正在加载……
+      </p>
+
+    </div>
+
+  </section>
+
+
+  
+
+
+  <!-- =========================
+       我的兑换申请
+  ========================== -->
+
+  <section class="student-section">
+
+    <div class="section-title-row">
+
+      <h3>
+        📦 我的兑换申请
+      </h3>
+
+    </div>
+
+    <div id="myRedemptions">
+
+      <p class="muted">
+        暂无兑换记录
+      </p>
+
+    </div>
+
+  </section>
+
+
+</main>
+
+<!-- =========================
+     兑换确认弹窗
+========================= -->
+
+<div
+  id="redeemModal"
+  class="redeem-modal hidden"
+>
+
+  <div
+    class="redeem-modal-backdrop"
+    data-close-redeem-modal
+  ></div>
+
+
+  <div
+    class="redeem-modal-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="redeemModalTitle"
+  >
+
+    <button
+      id="closeRedeemModal"
+      class="redeem-modal-close"
+      type="button"
+      aria-label="关闭"
+    >
+      ×
+    </button>
+
+
+    <div class="redeem-modal-image-box">
+
+      <img
+        id="redeemModalImage"
+        src=""
+        alt=""
+      >
+
+      <div
+        id="redeemModalPlaceholder"
+        class="redeem-modal-placeholder"
+      >
+        🎁
+      </div>
+
+    </div>
+
+
+    <div class="redeem-modal-content">
+
+      <p class="redeem-modal-label">
+        确认兑换
+      </p>
+
+      <h3 id="redeemModalTitle">
+        奖品名称
+      </h3>
+
+      <p
+        id="redeemModalDescription"
+        class="redeem-modal-description"
+      ></p>
+
+
+      <div class="redeem-points-summary">
+
+        <div class="redeem-points-item">
+
+          <span>
+            当前积分
+          </span>
+
+          <strong id="redeemCurrentPoints">
+            0
+          </strong>
+
+        </div>
+
+
+        <div class="redeem-points-arrow">
+          −
+        </div>
+
+
+        <div class="redeem-points-item cost">
+
+          <span>
+            本次消耗
+          </span>
+
+          <strong id="redeemCost">
+            0
+          </strong>
+
+        </div>
+
+
+        <div class="redeem-points-arrow">
+          =
+        </div>
+
+
+        <div class="redeem-points-item remaining">
+
+          <span>
+            兑换后
+          </span>
+
+          <strong id="redeemRemainingPoints">
+            0
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <div class="redeem-warning">
+
+        <span>ℹ️</span>
+
+        <p>
+          提交后将进入教师审核，审核通过后才会正式扣除积分。
+        </p>
+
+      </div>
+
+
+      <p
+        id="redeemModalMessage"
+        class="redeem-modal-message"
+      ></p>
+
+
+      <div class="redeem-modal-actions">
+
+        <button
+          id="cancelRedeemModal"
+          class="ghost-btn"
+          type="button"
+        >
+          再想想
+        </button>
+
+
+        <button
+          id="confirmRedeemModal"
+          class="primary-btn"
+          type="button"
+        >
+          确认申请
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+<footer class="site-footer">
+
+  <strong>Wells' Points Shop</strong>
+  <br>
+
+  © 2026 Wells. All Rights Reserved.
+
+</footer>
+  <script type="module" src="js/student.js"></script>
+</body>
+</html>
