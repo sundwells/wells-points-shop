@@ -1,4 +1,4 @@
-import { supabase } from "./supabase.js";
+﻿import { supabase } from "./supabase.js";
 
 
 // =====================================================
@@ -208,7 +208,7 @@ async function loadStudentPortal() {
 
     const { data, error } =
       await supabase.rpc(
-        "student_portal",
+        "student_portal_v2",
         {
           p_access_code:
             accessCode
@@ -754,10 +754,14 @@ function renderRewards() {
       const canRedeem =
         points >= cost;
 
-      const description =
-        String(
-          reward.description ?? ""
-        ).trim();
+      const description = String(
+        reward.description ?? ""
+      )
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .map(line => line.trim())
+        .join("\n")
+        .trim();
 
       const descriptionId =
         `reward-description-${index}`;
@@ -811,11 +815,7 @@ function renderRewards() {
             <p
               id="${descriptionId}"
               class="reward-description"
-            >
-              ${escapeHtml(
-                description
-              )}
-            </p>
+            >${escapeHtml(description)}</p>
 
             ${
               description

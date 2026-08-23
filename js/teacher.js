@@ -1,4 +1,4 @@
-import { supabase, supabaseConfigured } from "./supabase.js";
+﻿import { supabase, supabaseConfigured } from "./supabase.js";
 
 const authView = document.querySelector("#authView");
 const dashboardView = document.querySelector("#dashboardView");
@@ -55,7 +55,28 @@ const studentManagementSearch =
   document.querySelector("#studentManagementSearch");
 const studentManagementSearchBtn =
   document.querySelector("#studentManagementSearchBtn");
+const classPromotionModal =
+  document.querySelector("#classPromotionModal");
+const classPromotionTitle =
+  document.querySelector("#classPromotionTitle");
+const classPromotionSummary =
+  document.querySelector("#classPromotionSummary");
+const classPromotionStudentCount =
+  document.querySelector("#classPromotionStudentCount");
+const classPromotionStudentList =
+  document.querySelector("#classPromotionStudentList");
+const classPromotionNote =
+  document.querySelector("#classPromotionNote");
+const classPromotionMessage =
+  document.querySelector("#classPromotionMessage");
+const classPromotionLaterBtn =
+  document.querySelector("#classPromotionLaterBtn");
+const classPromotionConfirmBtn =
+  document.querySelector("#classPromotionConfirmBtn");
 let pendingRedemptions = [];
+let redemptionAuditRecords = [];
+let pendingClassPromotions = [];
+let activeClassPromotion = null;
 let studentManagementStudents = [];
 let studentManagementSearchQuery = "";
 
@@ -95,6 +116,7 @@ loginBtn.addEventListener("click", async () => {
 });
 
 document.querySelector("#teacherLogout").addEventListener("click", async () => {
+  closeClassPromotionModal();
   await supabase.auth.signOut();
   dashboardView.classList.add("hidden");
   authView.classList.remove("hidden");
@@ -118,9 +140,19 @@ async function enterDashboard() {
     await loadClasses();
     await loadStudents();
     await loadRedemptions();
+    await loadRedemptionAudit();
     refreshPointOptions();
     renderRewards();
 	  await loadTodayRecords();
+
+    try {
+      await checkClassPromotionReminders();
+    } catch (error) {
+      console.error(
+        "升班提醒检查失败：",
+        error
+      );
+    }
   } catch (err) {
     showMessage(err.message || "加载失败。", true);
   }
@@ -164,6 +196,10 @@ async function loadRedemptions() {
         cost,
         status,
         requested_at,
+        class_name_at_time,
+        student_name_at_time,
+        student_number_at_time,
+        reward_name_at_time,
         students (
           name,
           student_number,
@@ -195,7 +231,29 @@ async function loadRedemptions() {
   }
 
   pendingRedemptions =
-    data ?? [];
+    (data ?? []).map(item => ({
+      ...item,
+      students: {
+        ...(item.students ?? {}),
+        name:
+          item.student_name_at_time ??
+          item.students?.name,
+        student_number:
+          item.student_number_at_time ??
+          item.students?.student_number,
+        classes: {
+          name:
+            item.class_name_at_time ??
+            item.students?.classes?.name
+        }
+      },
+      rewards: {
+        ...(item.rewards ?? {}),
+        name:
+          item.reward_name_at_time ??
+          item.rewards?.name
+      }
+    }));
 
   renderRedemptions();
 
@@ -203,7 +261,156 @@ async function loadRedemptions() {
 
 }
 
-async function loadClasses() {
+async function loadRedemptionAudit() {
+  if (!selectedClassId) {
+    redemptionAuditRecords = [];
+    renderRedemptionAudit();
+    return;
+  }
+
+  const { data: classStudents, error: studentsError } =
+    await supabase
+      .from("students")
+      .select("id")
+      .eq("class_id", selectedClassId);
+
+  if (studentsError) throw studentsError;
+
+  const currentStudentIds = new Set(
+    (classStudents ?? []).map(student => Number(student.id))
+  );
+
+  const redemptionResult = await supabase
+    .from("redemptions")
+    .select(`
+      id,
+      student_id,
+      cost,
+      status,
+      requested_at,
+      processed_at,
+      redeemed_at,
+      class_id_at_time,
+      student_name_at_time,
+      reward_name_at_time,
+      students (
+        name
+      ),
+      rewards (
+        name
+      )
+    `)
+    .order("requested_at", { ascending: false });
+
+  if (redemptionResult.error) throw redemptionResult.error;
+
+  const visibleRedemptions = (redemptionResult.data ?? []).filter(record =>
+    Number(record.class_id_at_time) === Number(selectedClassId) ||
+    (!record.class_id_at_time && currentStudentIds.has(Number(record.student_id)))
+  );
+
+  const studentIds = [
+    ...new Set(visibleRedemptions.map(record => Number(record.student_id)))
+  ];
+
+  if (!studentIds.length) {
+    redemptionAuditRecords = [];
+    renderRedemptionAudit();
+    return;
+  }
+
+  const pointResult = await supabase
+    .from("point_records")
+    .select("id, student_id, points, record_date, created_at")
+    .in("student_id", studentIds);
+
+  if (pointResult.error) throw pointResult.error;
+
+  const eventsByStudent = new Map();
+
+  (pointResult.data ?? []).forEach(record => {
+    if (!eventsByStudent.has(record.student_id)) {
+      eventsByStudent.set(record.student_id, []);
+    }
+
+    eventsByStudent.get(record.student_id).push({
+      kind: "points",
+      id: record.id,
+      time: record.created_at ?? record.record_date ?? "",
+      points: Number(record.points) || 0
+    });
+  });
+
+  (redemptionResult.data ?? [])
+    .filter(redemption => studentIds.includes(Number(redemption.student_id)))
+    .forEach(redemption => {
+    if (!eventsByStudent.has(redemption.student_id)) {
+      eventsByStudent.set(redemption.student_id, []);
+    }
+
+    if (redemption.status === "approved") {
+      eventsByStudent.get(redemption.student_id).push({
+        kind: "redemption",
+        id: redemption.id,
+        time:
+          redemption.processed_at ??
+          redemption.redeemed_at ??
+          redemption.requested_at ??
+          "",
+        cost: Number(redemption.cost) || 0,
+        redemptionId: redemption.id
+      });
+    }
+  });
+
+  const balanceAfterRedemption = new Map();
+
+  eventsByStudent.forEach(events => {
+    events.sort((left, right) => {
+      const timeDifference =
+        new Date(left.time).getTime() -
+        new Date(right.time).getTime();
+
+      if (timeDifference !== 0) return timeDifference;
+      if (left.kind === right.kind) return Number(left.id) - Number(right.id);
+      return left.kind === "points" ? -1 : 1;
+    });
+
+    let balance = 0;
+
+    events.forEach(event => {
+      if (event.kind === "points") {
+        balance += event.points;
+        return;
+      }
+
+      balance -= event.cost;
+      balanceAfterRedemption.set(event.redemptionId, balance);
+    });
+  });
+
+  redemptionAuditRecords = visibleRedemptions.map(record => ({
+    ...record,
+    studentName:
+      record.student_name_at_time ??
+      record.students?.name ??
+      "学生",
+    rewardName:
+      record.reward_name_at_time ??
+      record.rewards?.name ??
+      "奖品",
+    balanceAfter:
+      record.status === "approved"
+        ? balanceAfterRedemption.get(record.id)
+        : null
+  }));
+
+  renderRedemptionAudit();
+}
+
+async function loadClasses(
+  preferredClassId = selectedClassId
+) {
 
   const { data, error } =
     await supabase
@@ -234,7 +441,15 @@ async function loadClasses() {
     return;
   }
 
+  const preferredClass =
+    classes.find(
+      item =>
+        Number(item.id) ===
+        Number(preferredClassId)
+    );
+
   selectedClassId =
+    preferredClass?.id ??
     classes[0].id;
 
   currentClass.value =
@@ -262,6 +477,7 @@ currentClass.addEventListener(
       }
 
       await loadTodayRecords();
+      await loadRedemptionAudit();
 
     } catch (err) {
 
@@ -346,6 +562,7 @@ async function loadStudentManagement() {
       )
     `)
     .eq("class_id", selectedClassId)
+    .is("graduated_at", null)
     .order("student_number");
 
   if (error) throw error;
@@ -472,6 +689,226 @@ exportAccessCodesBtn?.addEventListener(
   "click",
   exportAccessCodes
 );
+
+classPromotionLaterBtn?.addEventListener(
+  "click",
+  postponeClassPromotions
+);
+
+classPromotionConfirmBtn?.addEventListener(
+  "click",
+  confirmClassPromotion
+);
+
+async function checkClassPromotionReminders() {
+  const { data, error } =
+    await supabase.rpc(
+      "get_pending_class_promotions"
+    );
+
+  if (error) throw error;
+
+  if (data?.success === false) {
+    throw new Error(
+      data.message ||
+      "无法检查升班提醒。"
+    );
+  }
+
+  pendingClassPromotions =
+    Array.isArray(data?.promotions)
+      ? data.promotions
+      : [];
+
+  if (pendingClassPromotions.length) {
+    showNextClassPromotion();
+  }
+}
+
+function showNextClassPromotion() {
+  activeClassPromotion =
+    pendingClassPromotions[0] ??
+    null;
+
+  if (!activeClassPromotion) {
+    closeClassPromotionModal();
+    return;
+  }
+
+  const promotion =
+    activeClassPromotion;
+  const isGraduation =
+    promotion.action === "graduate" ||
+    Number(promotion.grade) === 9;
+  const promotionStudents =
+    Array.isArray(promotion.students)
+      ? promotion.students
+      : [];
+  const dueDate =
+    new Date(
+      `${promotion.promotion_due_date}T00:00:00`
+    ).toLocaleDateString(
+      "zh-CN",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      }
+    );
+
+  classPromotionTitle.textContent =
+    isGraduation
+      ? `${promotion.class_name} 毕业确认`
+      : `${promotion.class_name} 升班确认`;
+  classPromotionSummary.textContent =
+    isGraduation
+      ? `该班已于 ${dueDate} 到达毕业时间，确认后将归档为已毕业学生。`
+      : `该班已于 ${dueDate} 到达升班时间，确认后将升为 ${promotion.target_class_name}。`;
+  classPromotionNote.textContent =
+    isGraduation
+      ? "确认后，学生资料会复制到“已毕业学生”档案并保留积分、兑换历史，当前学生账号会停用；原班级会保留。"
+      : "确认后，以上学生将迁移到下一年级；选择“稍后处理”只关闭本次提醒，下次登录仍会再次显示。";
+  classPromotionConfirmBtn.textContent =
+    isGraduation
+      ? "确认毕业"
+      : "确认升班";
+  classPromotionStudentCount.textContent =
+    `${promotion.student_count ?? promotionStudents.length} 人`;
+  classPromotionStudentList.innerHTML =
+    promotionStudents.map(student => `
+      <div class="class-promotion-student">
+        <span>${escapeHtml(student.student_number ?? "—")}</span>
+        <strong>${escapeHtml(student.name ?? "未命名学生")}</strong>
+      </div>
+    `).join("");
+  classPromotionMessage.textContent = "";
+  classPromotionMessage.classList.remove(
+    "is-error"
+  );
+  classPromotionModal.classList.remove(
+    "hidden"
+  );
+  document.body.classList.add(
+    "modal-open"
+  );
+  classPromotionConfirmBtn.focus();
+}
+
+function postponeClassPromotions() {
+  pendingClassPromotions = [];
+  activeClassPromotion = null;
+  closeClassPromotionModal();
+}
+
+function closeClassPromotionModal() {
+  classPromotionModal?.classList.add(
+    "hidden"
+  );
+  document.body.classList.remove(
+    "modal-open"
+  );
+}
+
+async function confirmClassPromotion() {
+  if (!activeClassPromotion) return;
+
+  const promotion =
+    activeClassPromotion;
+  const isGraduation =
+    promotion.action === "graduate" ||
+    Number(promotion.grade) === 9;
+
+  classPromotionConfirmBtn.disabled = true;
+  classPromotionLaterBtn.disabled = true;
+  classPromotionConfirmBtn.textContent =
+    isGraduation
+      ? "正在归档…"
+      : "正在升班…";
+  classPromotionMessage.textContent =
+    "正在迁移学生，请稍候……";
+  classPromotionMessage.classList.remove(
+    "is-error"
+  );
+
+  try {
+    const { data, error } =
+      await supabase.rpc(
+        "confirm_class_promotion",
+        {
+          p_class_id:
+            Number(
+              promotion.class_id
+            )
+        }
+      );
+
+    if (error) throw error;
+
+    if (data?.success === false) {
+      throw new Error(
+        data.message ||
+        "班级升级失败。"
+      );
+    }
+
+    pendingClassPromotions.shift();
+    activeClassPromotion = null;
+    classPromotionMessage.textContent =
+      data?.message ||
+      (isGraduation
+        ? `${promotion.class_name} 毕业归档完成。`
+        : `${promotion.class_name} 升班完成。`);
+
+    try {
+      await loadClasses(
+        Number(
+          data?.to_class_id ??
+          selectedClassId
+        )
+      );
+      await loadStudents();
+      renderStudents();
+
+      if (
+        categorySelect.value === "exam"
+      ) {
+        renderExamScoreList();
+      }
+
+      await loadTodayRecords();
+      await loadRedemptionAudit();
+    } catch (refreshError) {
+      console.error(
+        "升班后刷新页面数据失败：",
+        refreshError
+      );
+    }
+
+    setTimeout(
+      () => {
+        closeClassPromotionModal();
+        showNextClassPromotion();
+      },
+      700
+    );
+  } catch (error) {
+    classPromotionMessage.textContent =
+      error.message ||
+      (isGraduation
+        ? "毕业归档失败，请稍后重试。"
+        : "班级升级失败，请稍后重试。");
+    classPromotionMessage.classList.add(
+      "is-error"
+    );
+  } finally {
+    classPromotionConfirmBtn.disabled = false;
+    classPromotionLaterBtn.disabled = false;
+    classPromotionConfirmBtn.textContent =
+      isGraduation
+        ? "确认毕业"
+        : "确认升班";
+  }
+}
 
 function exportAccessCodes() {
   if (!selectedClassId) {
@@ -1972,6 +2409,101 @@ function renderRedemptions() {
 
 }
 
+function renderRedemptionAudit() {
+  const container =
+    document.querySelector("#redemptionAuditList");
+
+  if (!container) return;
+
+  if (!redemptionAuditRecords.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <strong>暂无审核记录</strong>
+        <p class="muted">切换班级后会显示该班级的全部兑换记录。</p>
+      </div>
+    `;
+    return;
+  }
+
+  const statusMap = {
+    approved: {
+      label: "审核通过",
+      className: "is-approved"
+    },
+    rejected: {
+      label: "已拒绝",
+      className: "is-rejected"
+    },
+    pending: {
+      label: "待审核",
+      className: "is-pending"
+    }
+  };
+
+  const formatAuditDate = value => {
+    if (!value) return "—";
+    return new Date(value).toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  container.innerHTML = `
+    <div class="redemption-audit-row redemption-audit-header">
+      <div class="redemption-audit-cell"><strong>学生姓名</strong></div>
+      <div class="redemption-audit-cell"><strong>兑换物品</strong></div>
+      <div class="redemption-audit-cell"><strong>兑换后积分流水</strong></div>
+      <div class="redemption-audit-cell"><strong>审核意见</strong></div>
+      <div class="redemption-audit-cell"><strong>日期</strong></div>
+    </div>
+    ${redemptionAuditRecords.map(record => {
+      const status =
+        statusMap[record.status] ?? {
+          label: record.status ?? "未知",
+          className: "is-pending"
+        };
+      const pointsFlow =
+        record.status === "approved"
+          ? `-${formatPoints(record.cost)}，余额 ${formatPoints(record.balanceAfter ?? 0)}`
+          : "未扣除积分";
+      const auditDate =
+        record.processed_at ??
+        record.redeemed_at ??
+        record.requested_at;
+
+      return `
+        <div class="redemption-audit-row">
+          <div class="redemption-audit-cell">
+            <span class="redemption-audit-label">学生姓名</span>
+            <strong>${escapeHtml(record.studentName)}</strong>
+          </div>
+          <div class="redemption-audit-cell">
+            <span class="redemption-audit-label">兑换物品</span>
+            <strong>${escapeHtml(record.rewardName)}</strong>
+          </div>
+          <div class="redemption-audit-cell redemption-audit-points">
+            <span class="redemption-audit-label">兑换后积分流水</span>
+            ${escapeHtml(pointsFlow)}
+          </div>
+          <div class="redemption-audit-cell">
+            <span class="redemption-audit-label">审核意见</span>
+            <span class="redemption-audit-opinion ${status.className}">
+              ${escapeHtml(status.label)}
+            </span>
+          </div>
+          <div class="redemption-audit-cell">
+            <span class="redemption-audit-label">日期</span>
+            ${escapeHtml(formatAuditDate(auditDate))}
+          </div>
+        </div>
+      `;
+    }).join("")}
+  `;
+}
+
 function bindRedemptionActions() {
 
   document
@@ -2084,6 +2616,7 @@ async function approveRedemption(id) {
   );
 
   await loadRedemptions();
+  await loadRedemptionAudit();
 
   await loadStudents();
 
@@ -2153,6 +2686,7 @@ async function rejectRedemption(id) {
   );
 
   await loadRedemptions();
+  await loadRedemptionAudit();
 
 }
 
@@ -2185,6 +2719,15 @@ document
   ?.addEventListener(
     "click",
     loadRedemptions
+  );
+
+document
+  .querySelector(
+    "#refreshRedemptionAudit"
+  )
+  ?.addEventListener(
+    "click",
+    loadRedemptionAudit
   );
 
 /* =========================================================
