@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>教师端 · Wells' Points Shop</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=merged-audit-v2">
 </head>
 <body>
   <header class="topbar">
@@ -393,6 +393,29 @@
 
   </div>
 
+  <section class="redemption-audit-section">
+    <div class="redemption-audit-head">
+      <div>
+        <h3>审核记录</h3>
+        <p class="muted">当前班级的全部日期兑换审核记录。</p>
+      </div>
+      <button
+        id="refreshRedemptionAudit"
+        class="ghost-btn"
+        type="button"
+      >
+        ↻ 刷新记录
+      </button>
+    </div>
+
+    <div
+      id="redemptionAuditList"
+      class="redemption-audit-list"
+    >
+      <p class="muted">正在加载审核记录……</p>
+    </div>
+  </section>
+
 </section>
 <section
   id="panel-student-management"
@@ -483,6 +506,69 @@
 
   </main>
 
+<div
+  id="classPromotionModal"
+  class="modal class-promotion-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="classPromotionTitle"
+>
+  <div class="modal-card class-promotion-card">
+    <div class="modal-header">
+      <div>
+        <span class="class-promotion-kicker">新学年提醒</span>
+        <h3 id="classPromotionTitle">确认班级升班</h3>
+      </div>
+    </div>
+
+    <div class="modal-body">
+      <p
+        id="classPromotionSummary"
+        class="class-promotion-summary"
+      ></p>
+
+      <div class="class-promotion-list-head">
+        <strong>在读学生名单</strong>
+        <span id="classPromotionStudentCount"></span>
+      </div>
+
+      <div
+        id="classPromotionStudentList"
+        class="class-promotion-student-list"
+      ></div>
+
+      <p class="class-promotion-note">
+        <span id="classPromotionNote"></span>
+      </p>
+
+      <p
+        id="classPromotionMessage"
+        class="form-message class-promotion-message"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </div>
+
+    <div class="modal-footer">
+      <button
+        id="classPromotionLaterBtn"
+        class="ghost-btn"
+        type="button"
+      >
+        稍后处理
+      </button>
+
+      <button
+        id="classPromotionConfirmBtn"
+        class="primary-btn"
+        type="button"
+      >
+        确认升班
+      </button>
+    </div>
+  </div>
+</div>
+
 <footer class="site-footer">
 
   <strong>Wells' Points Shop</strong>
@@ -492,7 +578,7 @@
 
 </footer>
   
-<script type="module" src="js/teacher.js"></script><script
+<script type="module" src="js/teacher.js?v=merged-audit-v2"></script><script
   src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
 ></script>
 </body>
