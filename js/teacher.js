@@ -29,6 +29,11 @@ const examMessage =
 const categorySelect = document.querySelector("#categorySelect");
 const description = document.querySelector("#description");
 const pointsSelect = document.querySelector("#pointsSelect");
+const rulePointsField = document.querySelector("#rulePointsField");
+const customPointsField = document.querySelector("#customPointsField");
+const customPointsLabel = document.querySelector("#customPointsLabel");
+const customPoints = document.querySelector("#customPoints");
+const customPointsHint = document.querySelector("#customPointsHint");
 const saveMessage = document.querySelector("#saveMessage");
 const studentArea =
   document.querySelector("#studentArea");
@@ -1097,6 +1102,27 @@ categorySelect.addEventListener(
 
 function refreshPointOptions() {
   const category = categorySelect.value;
+  const isPunishment = category === "punishment";
+  const isSpecialReward = category === "special_reward";
+  const usesCustomPoints = isPunishment || isSpecialReward;
+
+  rulePointsField.classList.toggle("hidden", usesCustomPoints);
+  customPointsField.classList.toggle("hidden", !usesCustomPoints);
+
+  if (usesCustomPoints) {
+    customPointsLabel.textContent = isPunishment
+      ? "扣除积分"
+      : "奖励积分";
+    customPointsHint.textContent = isPunishment
+      ? "输入正数即可，保存时会自动记为扣分。"
+      : "最多支持 1 位小数，保存后直接计入学生账户。";
+    description.placeholder = isPunishment
+      ? "如：未按要求完成任务"
+      : "如：活动特别贡献";
+    return;
+  }
+
+  description.placeholder = "如：困难问题 / Unit 2 作业";
   const categoryRules = rules.filter(r => r.category === category);
 
   pointsSelect.innerHTML = categoryRules.map(r => `
@@ -1120,11 +1146,23 @@ async function savePoint() {
   const selectedOption =
     pointsSelect.selectedOptions[0];
 
-  const ruleId =
-    Number(selectedOption?.dataset.ruleId);
+  const usesCustomPoints =
+    category === "punishment" ||
+    category === "special_reward";
 
-  const pointValue =
-    Number(pointsSelect.value);
+  const ruleId =
+    usesCustomPoints
+      ? null
+      : Number(selectedOption?.dataset.ruleId);
+
+  const customPointValue =
+    Number(customPoints.value);
+
+  const pointValue = usesCustomPoints
+    ? category === "punishment"
+      ? -customPointValue
+      : customPointValue
+    : Number(pointsSelect.value);
 
   const desc =
     description.value.trim();
@@ -1138,10 +1176,36 @@ async function savePoint() {
 
   }
 
-  if (!ruleId || !desc) {
+  if (!desc) {
 
     return showMessage(
-      "请填写具体名称，并选择积分档位。",
+      "请填写具体名称。",
+      true
+    );
+
+  }
+
+  if (
+    usesCustomPoints &&
+    (
+      !Number.isFinite(customPointValue) ||
+      customPointValue <= 0 ||
+      customPointValue > 999999.9 ||
+      Math.abs(customPointValue * 10 - Math.round(customPointValue * 10)) > 1e-8
+    )
+  ) {
+
+    return showMessage(
+      "自定义积分必须大于 0，且最多保留 1 位小数。",
+      true
+    );
+
+  }
+
+  if (!usesCustomPoints && (!ruleId || !Number.isFinite(pointValue))) {
+
+    return showMessage(
+      "请选择一个有效的积分档位。",
       true
     );
 
@@ -1183,11 +1247,14 @@ async function savePoint() {
 
   }
 
-  showMessage(
-    `已给 ${selectedStudentIds.length} 名学生各加 +${formatPoints(pointValue)} 分。`
-  );
+  const resultMessage = category === "punishment"
+    ? `已为 ${selectedStudentIds.length} 名学生各扣除 ${formatPoints(Math.abs(pointValue))} 分。`
+    : `已给 ${selectedStudentIds.length} 名学生各加 +${formatPoints(pointValue)} 分。`;
+
+  showMessage(resultMessage);
 
   description.value = "";
+  customPoints.value = "";
 
   document
     .querySelectorAll(".student-box")
@@ -1312,7 +1379,7 @@ async function loadTodayRecords() {
 
             ·
 
-            +${formatPoints(
+            ${formatSignedPoints(
               record.points
             )}
 
@@ -1555,6 +1622,11 @@ function showMessage(text, error = false) {
 }
 function formatPoints(n) {
   return Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(1);
+}
+function formatSignedPoints(n) {
+  const value = Number(n);
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${formatPoints(Math.abs(value))}`;
 }
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({

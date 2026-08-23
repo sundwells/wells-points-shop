@@ -329,6 +329,14 @@ function renderStudent() {
       student.current_points
     );
 
+
+  document.querySelector(
+    "#dailyAveragePoints"
+  ).textContent =
+    formatPoints(
+      student.daily_average_points
+    );
+
 }
 
 
@@ -697,8 +705,8 @@ function renderPointRecords() {
 
         </div>
 
-        <strong class="point-positive">
-          +${formatPoints(
+        <strong class="${Number(record.points) < 0 ? "point-negative" : "point-positive"}">
+          ${formatSignedPoints(
             record.points
           )}
         </strong>
@@ -1197,6 +1205,25 @@ function formatPoints(
 }
 
 
+function formatSignedPoints(
+  value
+) {
+
+  const number =
+    Number(value ?? 0);
+
+  const sign =
+    number > 0
+      ? "+"
+      : number < 0
+        ? "−"
+        : "";
+
+  return `${sign}${formatPoints(Math.abs(number))}`;
+
+}
+
+
 function getRankIcon(
   rank
 ) {
@@ -1223,6 +1250,12 @@ function getCategoryName(
 
     practice:
       "作业练习",
+
+    punishment:
+      "惩罚分",
+
+    special_reward:
+      "特殊奖励",
 
     exam:
       "考试成绩"
