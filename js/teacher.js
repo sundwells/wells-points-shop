@@ -56,6 +56,8 @@ const studentManagementMessage =
   document.querySelector("#studentManagementMessage");
 const exportAccessCodesBtn =
   document.querySelector("#exportAccessCodesBtn");
+const exportStudentPointsBtn =
+  document.querySelector("#exportStudentPointsBtn");
 const studentManagementSearch =
   document.querySelector("#studentManagementSearch");
 const studentManagementSearchBtn =
@@ -695,6 +697,11 @@ exportAccessCodesBtn?.addEventListener(
   exportAccessCodes
 );
 
+exportStudentPointsBtn?.addEventListener(
+  "click",
+  exportStudentPoints
+);
+
 classPromotionLaterBtn?.addEventListener(
   "click",
   postponeClassPromotions
@@ -980,6 +987,132 @@ function exportAccessCodes() {
   } finally {
     exportAccessCodesBtn.disabled = false;
     exportAccessCodesBtn.textContent = "导出登录码";
+  }
+}
+
+async function exportStudentPoints() {
+  if (!selectedClassId) {
+    setStudentManagementMessage("请先选择一个班级。", true);
+    return;
+  }
+
+  if (studentManagementStudents.length === 0) {
+    setStudentManagementMessage("当前班级没有可导出的学生。", true);
+    return;
+  }
+
+  if (typeof XLSX === "undefined") {
+    setStudentManagementMessage("导出组件尚未加载，请刷新页面后重试。", true);
+    return;
+  }
+
+  exportStudentPointsBtn.disabled = true;
+  exportStudentPointsBtn.textContent = "正在导出…";
+
+  try {
+    const studentIds = studentManagementStudents.map(student => student.id);
+    const pointRecords = [];
+    const pageSize = 1000;
+
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from("point_records")
+        .select("student_id, points, record_date")
+        .in("student_id", studentIds)
+        .range(offset, offset + pageSize - 1);
+
+      if (error) throw error;
+
+      const page = data ?? [];
+      pointRecords.push(...page);
+
+      if (page.length < pageSize) break;
+    }
+
+    const pointStatsByStudent = new Map();
+
+    pointRecords.forEach(record => {
+      const studentId = Number(record.student_id);
+      const recordDate = String(record.record_date ?? "");
+      const stats = pointStatsByStudent.get(studentId) ?? {
+        totalPoints: 0,
+        firstRecordDate: ""
+      };
+
+      stats.totalPoints += Number(record.points ?? 0);
+
+      if (
+        recordDate &&
+        (!stats.firstRecordDate || recordDate < stats.firstRecordDate)
+      ) {
+        stats.firstRecordDate = recordDate;
+      }
+
+      pointStatsByStudent.set(studentId, stats);
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const exportRows = studentManagementStudents.map(student => {
+      const stats = pointStatsByStudent.get(Number(student.id));
+      let dailyAveragePoints = 0;
+
+      if (stats?.firstRecordDate) {
+        const firstRecordDate = new Date(`${stats.firstRecordDate}T00:00:00`);
+        const elapsedDays = Math.max(
+          Math.floor((today - firstRecordDate) / 86400000) + 1,
+          1
+        );
+        dailyAveragePoints = Math.round(
+          (stats.totalPoints / elapsedDays) * 10
+        ) / 10;
+      }
+
+      return {
+        姓名: student.name ?? "",
+        积分: Number(student.current_points ?? 0),
+        日均积分: dailyAveragePoints
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet["!cols"] = [
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 14 }
+    ];
+    worksheet["!autofilter"] = {
+      ref: worksheet["!ref"]
+    };
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "学生积分");
+
+    const selectedClass = classes.find(
+      item => Number(item.id) === Number(selectedClassId)
+    );
+    const className = selectedClass?.name ?? "当前班级";
+    const safeClassName = className.replace(/[\\/:*?"<>|]/g, "-");
+    const date = new Date().toISOString().slice(0, 10);
+
+    XLSX.writeFile(
+      workbook,
+      `学生积分余额-${safeClassName}-${date}.xlsx`
+    );
+
+    setStudentManagementMessage(
+      `已导出 ${exportRows.length} 名学生的积分余额。`
+    );
+  } catch (error) {
+    console.error("导出学生积分失败：", error);
+    setStudentManagementMessage(
+      error.message || "导出失败，请稍后重试。",
+      true
+    );
+  } finally {
+    exportStudentPointsBtn.disabled = false;
+    exportStudentPointsBtn.textContent = "导出学生积分";
   }
 }
 
