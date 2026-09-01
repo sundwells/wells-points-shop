@@ -699,7 +699,15 @@ exportAccessCodesBtn?.addEventListener(
 
 exportStudentPointsBtn?.addEventListener(
   "click",
-  exportStudentPoints
+  () => {
+    exportStudentPoints().catch(error => {
+      console.error("导出学生积分失败：", error);
+      setStudentManagementMessage(
+        error.message || "导出失败，请稍后重试。",
+        true
+      );
+    });
+  }
 );
 
 classPromotionLaterBtn?.addEventListener(
@@ -991,6 +999,8 @@ function exportAccessCodes() {
 }
 
 async function exportStudentPoints() {
+  setStudentManagementMessage("正在准备学生积分导出…");
+
   if (!selectedClassId) {
     setStudentManagementMessage("请先选择一个班级。", true);
     return;
@@ -1001,7 +1011,8 @@ async function exportStudentPoints() {
     return;
   }
 
-  if (typeof XLSX === "undefined") {
+  const xlsx = window.XLSX;
+  if (!xlsx) {
     setStudentManagementMessage("导出组件尚未加载，请刷新页面后重试。", true);
     return;
   }
@@ -1076,7 +1087,7 @@ async function exportStudentPoints() {
       };
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const worksheet = xlsx.utils.json_to_sheet(exportRows);
     worksheet["!cols"] = [
       { wch: 18 },
       { wch: 14 },
@@ -1086,8 +1097,8 @@ async function exportStudentPoints() {
       ref: worksheet["!ref"]
     };
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "学生积分");
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "学生积分");
 
     const selectedClass = classes.find(
       item => Number(item.id) === Number(selectedClassId)
@@ -1096,7 +1107,7 @@ async function exportStudentPoints() {
     const safeClassName = className.replace(/[\\/:*?"<>|]/g, "-");
     const date = new Date().toISOString().slice(0, 10);
 
-    XLSX.writeFile(
+    xlsx.writeFile(
       workbook,
       `学生积分余额-${safeClassName}-${date}.xlsx`
     );
