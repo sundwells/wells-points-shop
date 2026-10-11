@@ -691,16 +691,11 @@ function renderPointRecords() {
         <div>
 
           <strong>
-            ${escapeHtml(
-              record.description ??
-              getCategoryName(
-                record.category
-              )
-            )}
+            ${escapeHtml(getCategoryName(record.category))}${record.rule_name_at_time ? ` · ${escapeHtml(record.rule_name_at_time)}` : ["performance", "practice", "exam"].includes(record.category) ? " · 档位未保存" : ""}
           </strong>
 
           <small>
-            ${record.record_date}
+            ${escapeHtml(record.description ?? "")}${record.raw_score == null ? "" : ` · 原始成绩 ${escapeHtml(record.raw_score)}`} · ${escapeHtml(formatPointRecordTime(record.created_at, record.record_date))}
           </small>
 
         </div>
@@ -1327,6 +1322,13 @@ function formatDateTime(
     }
   );
 
+}
+
+function formatPointRecordTime(createdAt, recordDate) {
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime())
+    ? String(recordDate ?? "时间未记录")
+    : date.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 

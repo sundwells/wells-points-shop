@@ -636,7 +636,10 @@ function renderStudentManagement() {
     const statusClass = student.active ? "is-active" : "is-inactive";
 
     return `
-      <article class="student-management-row">
+      <button class="student-management-row" type="button"
+        data-student-records="${student.id}"
+        aria-expanded="false"
+        aria-controls="student-records-${student.id}">
         <span class="student-management-number">
           ${escapeHtml(student.student_number)}号
         </span>
@@ -653,7 +656,8 @@ function renderStudentManagement() {
           ${formatPoints(student.current_points)}
         </strong>
         <span class="student-status ${statusClass}">${statusText}</span>
-      </article>
+      </button>
+      <div id="student-records-${student.id}" class="student-management-records" hidden></div>
     `;
   }).join("");
 
@@ -691,6 +695,84 @@ studentManagementSearch?.addEventListener(
     }
   }
 );
+
+studentManagementList?.addEventListener("click", event => {
+  const studentButton = event.target.closest("[data-student-records]");
+  if (studentButton) {
+    const panel = document.getElementById(studentButton.getAttribute("aria-controls"));
+    panel.hidden = !panel.hidden;
+    studentButton.setAttribute("aria-expanded", String(!panel.hidden));
+    if (!panel.hidden && !panel.dataset.loaded) loadStudentRecords(panel, Number(studentButton.dataset.studentRecords));
+    return;
+  }
+
+  const moreButton = event.target.closest("[data-load-student-records]");
+  if (moreButton) {
+    const panel = moreButton.closest(".student-management-records");
+    loadStudentRecords(panel, Number(moreButton.dataset.loadStudentRecords));
+  }
+});
+
+async function loadStudentRecords(panel, studentId) {
+  if (panel.dataset.loading === "true") return;
+  panel.dataset.loading = "true";
+  const offset = Number(panel.dataset.offset ?? 0);
+  const moreButton = panel.querySelector("[data-load-student-records]");
+  if (moreButton) moreButton.disabled = true;
+  if (!panel.dataset.loaded) panel.innerHTML = '<p class="muted">正在加载积分记录……</p>';
+
+  const { data, error } = await supabase
+    .from("point_records")
+    .select("id, category, description, points, record_date, created_at, rule_name_at_time, raw_score")
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + 49);
+
+  if (!panel.isConnected) return;
+  panel.dataset.loading = "false";
+  if (error) {
+    if (moreButton) moreButton.disabled = false;
+    else panel.innerHTML = `<p class="muted">读取失败：${escapeHtml(error.message)}</p><button type="button" class="ghost-btn small" data-load-student-records="${studentId}">重试</button>`;
+    return;
+  }
+
+  const records = data ?? [];
+  if (!panel.dataset.loaded) {
+    panel.innerHTML = records.length ? '<div class="student-management-record-list"></div>' : '<p class="muted">暂无积分录入记录。</p>';
+    panel.dataset.loaded = "true";
+  }
+  panel.querySelector("[data-load-student-records]")?.remove();
+  panel.querySelector(".student-management-record-list")?.insertAdjacentHTML("beforeend", records.map(record => `
+    <div class="student-management-record">
+      <div>
+        <strong>${escapeHtml(getPointCategoryName(record.category))}${record.rule_name_at_time ? ` · ${escapeHtml(record.rule_name_at_time)}` : ["performance", "practice", "exam"].includes(record.category) ? " · 档位未保存" : ""}</strong>
+        <small>${escapeHtml(record.description)}${record.raw_score == null ? "" : ` · 原始成绩 ${escapeHtml(record.raw_score)}`}</small>
+      </div>
+      <strong class="${Number(record.points) < 0 ? "point-negative" : "point-positive"}">${formatSignedPoints(record.points)}</strong>
+      <time>${escapeHtml(formatPointRecordTime(record.created_at, record.record_date))}</time>
+    </div>
+  `).join(""));
+  panel.dataset.offset = String(offset + records.length);
+  if (records.length === 50) panel.insertAdjacentHTML("beforeend", `<button type="button" class="ghost-btn small" data-load-student-records="${studentId}">加载更多记录</button>`);
+}
+
+function getPointCategoryName(category) {
+  return {
+    performance: "课堂表现",
+    practice: "作业练习",
+    exam: "考试成绩",
+    punishment: "惩罚扣分",
+    special_reward: "特殊奖励"
+  }[category] ?? "积分录入";
+}
+
+function formatPointRecordTime(createdAt, recordDate) {
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime())
+    ? String(recordDate ?? "时间未记录")
+    : date.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
 
 exportAccessCodesBtn?.addEventListener(
   "click",
