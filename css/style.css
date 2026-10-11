@@ -1143,9 +1143,15 @@ label.full{grid-column:1 / -1}
 .student-management-row {
 
   min-height: 62px;
+  width: 100%;
   padding: 11px 16px;
+  border: 0;
   border-bottom: 1px solid #edf0ee;
   background: rgba(255, 255, 255, .84);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   transition: background .16s ease, box-shadow .16s ease;
 
 }
@@ -1220,6 +1226,45 @@ label.full{grid-column:1 / -1}
 
   justify-self: start;
 
+}
+
+.student-management-records {
+  min-width: 720px;
+  padding: 12px 16px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #f7faf7;
+}
+
+.student-management-records[hidden] {
+  display: none;
+}
+
+.student-management-records > .ghost-btn {
+  margin-top: 12px;
+}
+
+.student-management-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 170px;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.student-management-record strong,
+.student-management-record small {
+  display: block;
+}
+
+.student-management-record small,
+.student-management-record time {
+  color: var(--muted);
+}
+
+.student-management-record time {
+  text-align: right;
 }
 
 @media (max-width: 600px) {
