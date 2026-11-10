@@ -1,5 +1,7 @@
 ﻿import { supabase, supabaseConfigured } from "./supabase.js";
 
+import { summarizeExam } from "./exam-analysis.js";
+
 const authView = document.querySelector("#authView");
 const dashboardView = document.querySelector("#dashboardView");
 const authMessage = document.querySelector("#authMessage");
@@ -14,6 +16,9 @@ const examBatchPanel =
 
 const examName =
   document.querySelector("#examName");
+const examFullScore = document.querySelector("#examFullScore");
+const examAnalysisList = document.querySelector("#examAnalysisList");
+const examAnalysisMessage = document.querySelector("#examAnalysisMessage");
 
 const examScoreList =
   document.querySelector("#examScoreList");
@@ -47,6 +52,7 @@ let rewards = [];
 
 let classes = [];
 let selectedClassId = null;
+let examAnalysisRequestId = 0;
 
 const currentClass =
   document.querySelector("#currentClass");
@@ -468,6 +474,8 @@ currentClass.addEventListener(
 
     selectedClassId =
       Number(currentClass.value);
+    examAnalysisRequestId++;
+    examAnalysisList.innerHTML = "";
 
     try {
 
@@ -1835,6 +1843,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
     tab.classList.add("active");
     document.querySelector(`#panel-${tab.dataset.panel}`).classList.add("active");
+    if (tab.dataset.panel === "exam-analysis") loadExamAnalysis();
   });
 });
 
@@ -1880,8 +1889,8 @@ function renderExamScoreList() {
           type="number"
           class="exam-score-input"
           min="0"
-          max="120"
-          step="1"
+          max="${escapeHtml(examFullScore.value || 120)}"
+          step="0.1"
           placeholder="成绩"
         >
 
@@ -1909,7 +1918,7 @@ function renderExamScoreList() {
 }
 
 function getExamRule(score) {
-  const value = Number(score);
+  const value = Math.round(Number(score));
 
   if (!Number.isFinite(value)) {
     return null;
@@ -1921,6 +1930,18 @@ function getExamRule(score) {
     value <= Number(rule.max_score)
   ) ?? null;
 }
+
+function getNormalizedExamScore(score) {
+  return Math.round(Number(score) * 120 / Number(examFullScore.value) * 100) / 100;
+}
+
+examFullScore.addEventListener("input", () => {
+  const fullScore = Number(examFullScore.value);
+  examScoreList.querySelectorAll(".exam-score-input").forEach(input => {
+    input.max = Number.isFinite(fullScore) && fullScore > 0 ? String(fullScore) : "";
+  });
+  updateExamPreview();
+});
 
 function getExamPoints(score) {
   const rule = getExamRule(score);
@@ -1963,15 +1984,21 @@ function updateExamPreview() {
 
       }
 
-      filled++;
+      const fullScore = Number(examFullScore.value);
+      if (!Number.isFinite(fullScore) || fullScore <= 0 || score < 0 || score > fullScore) {
+        result.textContent = "成绩超出满分";
+        result.className = "exam-result zero";
+        return;
+      }
+      const normalizedScore = getNormalizedExamScore(score);
+      const points = getExamPoints(normalizedScore);
 
-      const points =
-        getExamPoints(score);
+      filled++;
 
       totalPoints += points;
 
       result.textContent =
-        `+${formatPoints(points)}`;
+        `${formatPoints(normalizedScore)}/120 · +${formatPoints(points)}`;
 
       result.className =
         points > 0
@@ -2009,6 +2036,12 @@ async function saveExamBatch() {
 
   }
 
+  const fullScore = Number(examFullScore.value);
+  if (!Number.isFinite(fullScore) || fullScore <= 0 || fullScore > 9999.9) {
+    examMessage.textContent = "请输入大于 0 且不超过 9999.9 的满分。";
+    return;
+  }
+
   const rows = [];
 
   document
@@ -2033,17 +2066,25 @@ async function saveExamBatch() {
 
       }
 
+      if (score < 0 || score > fullScore || Math.round(score * 10) !== score * 10) {
+        rows.push({ invalid: true });
+        return;
+      }
+
       const studentId =
         Number(
           row.dataset.studentId
         );
 
-      const points =
-        getExamPoints(score);
+      const normalizedScore = Math.round(score * 120 / fullScore * 100) / 100;
+      const points = getExamPoints(normalizedScore);
 
-      const rule = getExamRule(score);
+      const rule = getExamRule(normalizedScore);
 
-      if (!rule) return;
+      if (!rule) {
+        rows.push({ invalid: true });
+        return;
+      }
 
       rows.push({
 
@@ -2058,6 +2099,7 @@ async function saveExamBatch() {
 
         raw_score:
           score,
+        normalized_score: normalizedScore,
 
         points:
           points,
@@ -2073,6 +2115,11 @@ async function saveExamBatch() {
       });
 
     });
+
+  if (rows.some(row => row.invalid)) {
+    examMessage.textContent = "成绩必须在 0 到满分之间，且最多保留一位小数。";
+    return;
+  }
 
   if (rows.length === 0) {
 
@@ -2090,12 +2137,23 @@ async function saveExamBatch() {
 
   if (!confirmed) return;
 
-  const { error } =
-    await supabase
-      .from("point_records")
-      .insert(rows);
+  const { data: exam, error: examError } = await supabase
+    .from("exams")
+    .insert({ class_id: selectedClassId, name, full_score: fullScore })
+    .select("id")
+    .single();
+
+  if (examError) {
+    examMessage.textContent = examError.message;
+    return;
+  }
+
+  const { error } = await supabase
+    .from("point_records")
+    .insert(rows.map(row => ({ ...row, exam_id: exam.id })));
 
   if (error) {
+    await supabase.from("exams").delete().eq("id", exam.id);
 
     examMessage.textContent =
       error.message;
@@ -2117,6 +2175,7 @@ async function saveExamBatch() {
     });
 
   examName.value = "";
+  examFullScore.value = "120";
 
   updateExamPreview();
 
@@ -2126,6 +2185,128 @@ async function saveExamBatch() {
 
   await loadTodayRecords();
 
+}
+
+document.querySelector("#refreshExamAnalysis").addEventListener("click", loadExamAnalysis);
+
+async function loadExamAnalysis() {
+  const requestId = ++examAnalysisRequestId;
+  examAnalysisList.innerHTML = '<p class="muted">正在加载考试……</p>';
+  examAnalysisMessage.textContent = "";
+  if (!selectedClassId) {
+    examAnalysisList.innerHTML = '<p class="muted">请先选择班级。</p>';
+    return;
+  }
+
+  const { data, error } = await supabase.from("exams")
+    .select("id, name, full_score, created_at")
+    .eq("class_id", selectedClassId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (requestId !== examAnalysisRequestId) return;
+  if (error) {
+    examAnalysisList.innerHTML = "";
+    examAnalysisMessage.textContent = error.message;
+    return;
+  }
+
+  examAnalysisList.innerHTML = data.length ? data.map(exam => `
+    <article class="exam-analysis-card" data-exam-id="${exam.id}">
+      <button type="button" class="exam-analysis-toggle ghost-btn" aria-expanded="false">
+        <strong>${escapeHtml(exam.name)}</strong>
+        <span>考试 ID ${exam.id} · 满分 ${escapeHtml(exam.full_score)} · ${escapeHtml(new Date(exam.created_at).toLocaleDateString("zh-CN"))}</span>
+      </button>
+      <div class="exam-analysis-detail" hidden></div>
+    </article>
+  `).join("") : '<p class="muted">当前班级暂无 V1.3 录入的考试。旧记录没有考试 ID，无法安全归入某一次考试。</p>';
+
+  examAnalysisList.querySelectorAll(".exam-analysis-card").forEach((card, index) => {
+    card.querySelector(".exam-analysis-toggle").addEventListener("click", () =>
+      toggleExamAnalysis(card, data[index]));
+  });
+}
+
+async function toggleExamAnalysis(card, exam) {
+  const button = card.querySelector(".exam-analysis-toggle");
+  const detail = card.querySelector(".exam-analysis-detail");
+  if (!detail.hidden) {
+    detail.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    return;
+  }
+  detail.hidden = false;
+  button.setAttribute("aria-expanded", "true");
+  detail.textContent = "正在计算……";
+
+  const scores = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from("point_records")
+      .select("raw_score")
+      .eq("exam_id", exam.id)
+      .eq("category", "exam")
+      .range(offset, offset + 499);
+    if (error) {
+      detail.textContent = error.message;
+      return;
+    }
+    scores.push(...data.map(record => record.raw_score));
+    if (data.length < 500) break;
+  }
+
+  const stats = summarizeExam(scores, Number(exam.full_score));
+  if (!stats) {
+    detail.textContent = "这次考试暂无成绩。";
+    return;
+  }
+  detail.innerHTML = `
+    <div class="exam-analysis-stats">
+      <span>实际得分人数 <strong>${stats.count}</strong></span>
+      <span>平均分 <strong>${stats.average}</strong></span>
+      <span>中位数 <strong>${stats.median}</strong></span>
+      <span>最高分 <strong>${stats.highest}</strong></span>
+      <span>最低分 <strong>${stats.lowest}</strong></span>
+      <span>及格人数 <strong>${stats.passing}</strong></span>
+      <span>及格率 <strong>${stats.passingRate}%</strong></span>
+    </div>
+    <p class="muted">分数段（占满分比例）：60%以下 ${stats.bands[0]} 人；60–69% ${stats.bands[1]} 人；70–79% ${stats.bands[2]} 人；80–89% ${stats.bands[3]} 人；90%以上 ${stats.bands[4]} 人。及格线为满分的 60%。</p>
+    <button type="button" class="primary-btn exam-report-button">生成详细分析报告</button>
+    <p class="form-message exam-report-message" role="status"></p>
+    <div class="exam-report-output" hidden></div>
+  `;
+  detail.querySelector(".exam-report-button").addEventListener("click", () =>
+    generateExamReport(detail, exam, stats));
+}
+
+async function generateExamReport(detail, exam, stats) {
+  const button = detail.querySelector(".exam-report-button");
+  const message = detail.querySelector(".exam-report-message");
+  const output = detail.querySelector(".exam-report-output");
+  button.disabled = true;
+  message.textContent = "正在生成报告……";
+  output.hidden = true;
+  try {
+    const { data, error } = await supabase.functions.invoke("exam-report", {
+      body: { examName: exam.name, fullScore: Number(exam.full_score), stats }
+    });
+    if (error) throw error;
+    if (!data?.report) throw new Error("报告 API 未返回内容。");
+    output.textContent = data.report;
+    output.hidden = false;
+    message.textContent = "报告仅在当前页面显示，刷新后不会保留。";
+  } catch (error) {
+    let detail = error.message;
+    if (error.context instanceof Response) {
+      try {
+        const body = await error.context.json();
+        detail = body.error || body.message || detail;
+      } catch {
+        detail = `${detail}（HTTP ${error.context.status}）`;
+      }
+    }
+    message.textContent = `生成失败：${detail}`;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function uploadRewardImage(file) {
