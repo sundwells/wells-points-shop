@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>教师端 · Wells' Points Shop</title>
-  <link rel="stylesheet" href="css/style.css?v=1.2">
+  <link rel="stylesheet" href="css/style.css?v=1.3">
 </head>
 <body>
   <header class="topbar">
@@ -93,6 +93,8 @@
   学生管理
 </button>
 
+  <button class="tab" data-panel="exam-analysis">成绩分析</button>
+
 </section>
 
     <section id="panel-points" class="panel active">
@@ -162,6 +164,11 @@
       id="examName"
       placeholder="例如：Unit 1–3 测试"
     >
+  </label>
+
+  <label>
+    本次考试满分
+    <input type="number" id="examFullScore" min="0.1" max="9999.9" step="0.1" value="120" required>
   </label>
 
   <div class="exam-score-list" id="examScoreList">
@@ -529,6 +536,18 @@
 
 </section>
 
+<section id="panel-exam-analysis" class="panel">
+  <div class="panel-head">
+    <div>
+      <h2>成绩分析</h2>
+      <p class="muted">选择本班一次考试，查看实际成绩统计并生成报告。</p>
+    </div>
+    <button id="refreshExamAnalysis" class="ghost-btn" type="button">刷新考试列表</button>
+  </div>
+  <p id="examAnalysisMessage" class="form-message" role="status"></p>
+  <div id="examAnalysisList" class="exam-analysis-list"></div>
+</section>
+
   </main>
 
 <div
@@ -604,6 +623,9 @@
 </footer>
   
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script type="module" src="js/teacher.js?v=1.2"></script>
+<script type="importmap">
+{"imports":{"./js/supabase.js":"./js/supabase.js?v=1.3.1"}}
+</script>
+<script type="module" src="js/teacher.js?v=1.3.2"></script>
 </body>
 </html>
