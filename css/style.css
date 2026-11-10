@@ -1414,3 +1414,16 @@ label.full{grid-column:1 / -1}
   line-height: 1.7;
 
 }
+
+.exam-analysis-list { display: grid; gap: 14px; }
+.exam-analysis-card { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.exam-analysis-toggle { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
+.exam-analysis-toggle span { color: var(--muted); font-size: 13px; }
+.exam-analysis-detail { padding: 18px 4px 4px; }
+.exam-analysis-detail[hidden], .exam-report-output[hidden] { display: none; }
+.exam-analysis-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.exam-analysis-stats span { padding: 9px 12px; border-radius: 10px; background: #f3f8f4; }
+.exam-analysis-stats strong { margin-left: 5px; }
+.exam-report-button { display: block; margin-left: auto; }
+.exam-report-output { white-space: pre-wrap; line-height: 1.75; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #f8faf8; }
+@media (max-width: 600px) { .exam-analysis-toggle { flex-direction: column; align-items: flex-start; } }
