@@ -53,6 +53,7 @@ let rewards = [];
 let classes = [];
 let selectedClassId = null;
 let examAnalysisRequestId = 0;
+let redemptionRequestId = 0;
 
 const currentClass =
   document.querySelector("#currentClass");
@@ -198,6 +199,14 @@ async function loadRewards() {
 }
 
 async function loadRedemptions() {
+  const requestId = ++redemptionRequestId;
+  const classId = selectedClassId;
+  if (!classId) {
+    pendingRedemptions = [];
+    renderRedemptions();
+    updatePendingRedemptionCount();
+    return;
+  }
 
   const { data, error } =
     await supabase
@@ -209,6 +218,7 @@ async function loadRedemptions() {
         cost,
         status,
         requested_at,
+        class_id_at_time,
         class_name_at_time,
         student_name_at_time,
         student_number_at_time,
@@ -243,8 +253,14 @@ async function loadRedemptions() {
 
   }
 
+  if (requestId !== redemptionRequestId || classId !== selectedClassId) return;
+
   pendingRedemptions =
-    (data ?? []).map(item => ({
+    (data ?? []).filter(item =>
+      Number(item.class_id_at_time) === Number(classId) ||
+      (item.class_id_at_time == null &&
+        Number(item.students?.class_id) === Number(classId))
+    ).map(item => ({
       ...item,
       students: {
         ...(item.students ?? {}),
@@ -475,6 +491,10 @@ currentClass.addEventListener(
     selectedClassId =
       Number(currentClass.value);
     examAnalysisRequestId++;
+    redemptionRequestId++;
+    pendingRedemptions = [];
+    renderRedemptions();
+    updatePendingRedemptionCount();
     examAnalysisList.innerHTML = "";
 
     try {
@@ -492,6 +512,7 @@ currentClass.addEventListener(
       }
 
       await loadTodayRecords();
+      await loadRedemptions();
       await loadRedemptionAudit();
 
     } catch (err) {
@@ -2024,6 +2045,12 @@ document
 
 async function saveExamBatch() {
 
+  const classId = selectedClassId;
+  if (!classId) {
+    examMessage.textContent = "请先选择班级。";
+    return;
+  }
+
   const name =
     examName.value.trim();
 
@@ -2137,24 +2164,16 @@ async function saveExamBatch() {
 
   if (!confirmed) return;
 
-  const { data: exam, error: examError } = await supabase
-    .from("exams")
-    .insert({ class_id: selectedClassId, name, full_score: fullScore })
-    .select("id")
-    .single();
-
-  if (examError) {
-    examMessage.textContent = examError.message;
-    return;
-  }
-
-  const { error } = await supabase
-    .from("point_records")
-    .insert(rows.map(row => ({ ...row, exam_id: exam.id })));
+  const { error } = await supabase.rpc("save_exam_batch", {
+    p_class_id: classId,
+    p_name: name,
+    p_full_score: fullScore,
+    p_rows: rows.map(({ student_id, raw_score, normalized_score, points, rule_id, record_date }) => ({
+      student_id, raw_score, normalized_score, points, rule_id, record_date
+    }))
+  });
 
   if (error) {
-    await supabase.from("exams").delete().eq("id", exam.id);
-
     examMessage.textContent =
       error.message;
 
@@ -2191,25 +2210,48 @@ document.querySelector("#refreshExamAnalysis").addEventListener("click", loadExa
 
 async function loadExamAnalysis() {
   const requestId = ++examAnalysisRequestId;
+  const classId = selectedClassId;
   examAnalysisList.innerHTML = '<p class="muted">正在加载考试……</p>';
   examAnalysisMessage.textContent = "";
-  if (!selectedClassId) {
+  if (!classId) {
     examAnalysisList.innerHTML = '<p class="muted">请先选择班级。</p>';
     return;
   }
 
-  const { data, error } = await supabase.from("exams")
-    .select("id, name, full_score, created_at")
-    .eq("class_id", selectedClassId)
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (requestId !== examAnalysisRequestId) return;
-  if (error) {
-    examAnalysisList.innerHTML = "";
-    examAnalysisMessage.textContent = error.message;
-    return;
+  const examIds = new Set();
+  for (let offset = 0; ; offset += 500) {
+    const { data: records, error } = await supabase.from("point_records")
+      .select("exam_id, students!inner(class_id)")
+      .eq("category", "exam")
+      .not("exam_id", "is", null)
+      .eq("students.class_id", classId)
+      .order("id")
+      .range(offset, offset + 499);
+    if (requestId !== examAnalysisRequestId) return;
+    if (error) {
+      examAnalysisList.innerHTML = "";
+      examAnalysisMessage.textContent = error.message;
+      return;
+    }
+    records.forEach(record => examIds.add(record.exam_id));
+    if (records.length < 500) break;
   }
 
+  let data = [];
+  if (examIds.size) {
+    const result = await supabase.from("exams")
+      .select("id, name, full_score, created_at")
+      .in("id", [...examIds])
+      .order("created_at", { ascending: false });
+    if (requestId !== examAnalysisRequestId) return;
+    if (result.error) {
+      examAnalysisList.innerHTML = "";
+      examAnalysisMessage.textContent = result.error.message;
+      return;
+    }
+    data = result.data ?? [];
+  }
+  if (requestId !== examAnalysisRequestId) return;
   examAnalysisList.innerHTML = data.length ? data.map(exam => `
     <article class="exam-analysis-card" data-exam-id="${exam.id}">
       <button type="button" class="exam-analysis-toggle ghost-btn" aria-expanded="false">
@@ -2222,11 +2264,11 @@ async function loadExamAnalysis() {
 
   examAnalysisList.querySelectorAll(".exam-analysis-card").forEach((card, index) => {
     card.querySelector(".exam-analysis-toggle").addEventListener("click", () =>
-      toggleExamAnalysis(card, data[index]));
+      toggleExamAnalysis(card, data[index], classId));
   });
 }
 
-async function toggleExamAnalysis(card, exam) {
+async function toggleExamAnalysis(card, exam, classId) {
   const button = card.querySelector(".exam-analysis-toggle");
   const detail = card.querySelector(".exam-analysis-detail");
   if (!detail.hidden) {
@@ -2241,10 +2283,13 @@ async function toggleExamAnalysis(card, exam) {
   const scores = [];
   for (let offset = 0; ; offset += 500) {
     const { data, error } = await supabase.from("point_records")
-      .select("raw_score")
+      .select("raw_score, students!inner(class_id)")
       .eq("exam_id", exam.id)
       .eq("category", "exam")
+      .eq("students.class_id", classId)
+      .order("id")
       .range(offset, offset + 499);
+    if (classId !== selectedClassId) return;
     if (error) {
       detail.textContent = error.message;
       return;
